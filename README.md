@@ -1,2 +1,4 @@
-wallbase-dm
+Wallbase-DM
 ===========
+
+Download wallpapers from Wallbase
