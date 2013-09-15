@@ -1,27 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Forms;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using Microsoft.Win32;
 
 namespace WallbaseDM
 {
-    /// <summary>
-    /// Логика взаимодействия для MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
         public MainWindow()
@@ -139,6 +124,16 @@ namespace WallbaseDM
 
             txtDestination.Text = dialog.SelectedPath;
             user.Default.lastDestination = dialog.SelectedPath;
+        }
+
+        public void progressStart()
+        {
+            progressBar.IsIndeterminate = true;
+        }
+
+        public void progressStop()
+        {
+            progressBar.IsIndeterminate = false;
         }
     }
 }

@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.IO;
-using System.Linq;
 using System.Net;
-using System.Net.WebSockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -54,21 +51,25 @@ namespace WallbaseDM
         {
             List<WallbasePicture> wallpaperList = await GetWallpaperList(queryString, limit);
 
-            Log("Count: " + wallpaperList.Count);
-
+            Log("To download: " + wallpaperList.Count);
+            MainWindow mw = Application.Current.MainWindow as MainWindow;
+            mw.progressStart();
             Regex regex = new Regex("<img src=\\\"(http://wallpapers.wallbase.cc/(.*))\\\" class=\\\"wall");
 
+            int current = 0;
+            
             foreach (var wallbasePicture in wallpaperList)
             {
                 string response = await MakeRequest(WALLBASE_WALLPAPER_URL + wallbasePicture.Name, wallbasePicture.Referer);
 
                 Match match = regex.Match(response);
-
+                current++;
                 DownloadImage(match.Groups[1].ToString(), destination + "/" + wallbasePicture.Name + ".jpg");
 
-                Log(match.Groups[1].ToString());
+                mw.Title = "WallbaseDM - Downloading: " + current + " from " + wallpaperList.Count;
             }
 
+            mw.progressStop();
             return true;
         }
 
@@ -81,9 +82,9 @@ namespace WallbaseDM
                 
                 HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
 
-                if ((response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Redirect ||
-                     response.StatusCode == HttpStatusCode.Moved) &&
-                    response.ContentType.StartsWith("image", StringComparison.OrdinalIgnoreCase))
+                if (response != null && ((response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Redirect ||
+                                          response.StatusCode == HttpStatusCode.Moved) &&
+                                         response.ContentType.StartsWith("image", StringComparison.OrdinalIgnoreCase)))
                 {
                     using (Stream stream = response.GetResponseStream())
                     {
@@ -124,25 +125,35 @@ namespace WallbaseDM
                 Regex regex = new Regex("<div id=\\\"thumb([0-9]+)\\\" class=\\\"thumbnail purity-([0-9]+)\\\"");
                 string url;
 
-                while (current <= until && current < limit)
+                MainWindow mw = Application.Current.MainWindow as MainWindow;
+                mw.progressStart();
+                until = until > limit ? limit : until;
+
+                while (current < until)
                 {
+                    if(current >= limit)
+                        break;
+                    
                     url = WALLBASE_SEARCH_PAGE + "/" + current + query;
                     response = await MakeRequest(url);
 
-                    MatchCollection matches = regex.Matches(response);
-
-                    foreach (Match match in matches)
+                    if (response != null)
                     {
-                        if (current >= limit)
-                            break;
+                        MatchCollection matches = regex.Matches(response);
+
+                        foreach (Match match in matches)
+                        {
+                            if (current >= limit)
+                                break;
 
                             int purity = Int32.Parse(match.Groups[2].ToString());
                             result.Add(new WallbasePicture(match.Groups[1].ToString(), url, (Purity) purity));
                             current++;
+                        }
+                        mw.Title = "WallbaseDM - Parsing: " + current + " from " + until;
                     }
-                    Log(current + " from " + until);
                 }
-
+                mw.progressStop();
                 return result;
             }
             catch (Exception)
