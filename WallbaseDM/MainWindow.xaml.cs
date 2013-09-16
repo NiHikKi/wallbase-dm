@@ -1,5 +1,7 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Net;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
@@ -22,6 +24,12 @@ namespace WallbaseDM
             txtDestination.Text = user.Default.lastDestination;
             Order.SelectedIndex = user.Default.orderBy;
             OrderMode.SelectedIndex = user.Default.orderMode;
+	        txtLimit.Text = user.Default.limit;
+	        txtLogin.Text = user.Default.login;
+	        txtPass.Password = user.Default.pass;
+
+			ServicePointManager.Expect100Continue = false;
+	        ServicePointManager.DefaultConnectionLimit = 30;
         }
 
         private async void ButtonStart_OnClick(object sender, RoutedEventArgs e)
@@ -69,6 +77,8 @@ namespace WallbaseDM
                                                      limit > 0 ? limit : Int32.MaxValue))
             {
                 ButtonStart.IsEnabled = true;
+	            Title = "WallbaseDM";
+				Log("Completed!");
             }
         }
 
@@ -83,6 +93,10 @@ namespace WallbaseDM
             user.Default.searchQuery = SearchQuery.Text;
             user.Default.orderBy = (byte) Order.SelectedIndex;
             user.Default.orderMode = (byte) OrderMode.SelectedIndex;
+	        user.Default.limit = txtLimit.Text;
+	        user.Default.login = txtLogin.Text;
+			if((bool)chkSave.IsChecked)
+				user.Default.pass = txtPass.Password;
 
             user.Default.Save();
         }

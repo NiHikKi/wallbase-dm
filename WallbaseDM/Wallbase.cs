@@ -31,9 +31,8 @@ namespace WallbaseDM
 
         public bool IsAuthenticated = false;
         private CookieContainer _cookies = new CookieContainer();
-        private WebClient _client = new WebClient();
 
-        public string BuildQuery(bool isSFW, bool isSKETCHY, bool isNSFW, bool isW, bool isWG, bool isHR, string color,
+	    public string BuildQuery(bool isSFW, bool isSKETCHY, bool isNSFW, bool isW, bool isWG, bool isHR, string color,
                                  string query, bool isDesc, string order)
         {
             string purity = (isSFW ? "1" : "0") + (isSKETCHY ? "1" : "0") + (isNSFW ? "1" : "0");
@@ -46,65 +45,106 @@ namespace WallbaseDM
 
             return queryString;
         }
-
+		
         public async Task<bool> DownloadWallpapers(string queryString, string destination, bool byPurity = false, int limit = Int32.MaxValue)
         {
             List<WallbasePicture> wallpaperList = await GetWallpaperList(queryString, limit);
 
-            Log("To download: " + wallpaperList.Count);
+			List<string> alreadyDownloaded = GetDownloadedWallpaperList(destination);
+
+			List<WallbasePicture> toDownload = new List<WallbasePicture>();
+
+	        foreach (WallbasePicture picture in wallpaperList)
+	        {
+		        if(!alreadyDownloaded.Contains(picture.Name))
+					toDownload.Add(picture);
+	        }
+			
+			Log("To download: " + toDownload.Count);
             MainWindow mw = Application.Current.MainWindow as MainWindow;
             mw.progressStart();
             Regex regex = new Regex("<img src=\\\"(http://wallpapers.wallbase.cc/(.*))\\\" class=\\\"wall");
 
             int current = 0;
-            
-            foreach (var wallbasePicture in wallpaperList)
+
+			foreach (var wallbasePicture in toDownload)
             {
                 string response = await MakeRequest(WALLBASE_WALLPAPER_URL + wallbasePicture.Name, wallbasePicture.Referer);
 
                 Match match = regex.Match(response);
                 current++;
-                DownloadImage(match.Groups[1].ToString(), destination + "/" + wallbasePicture.Name + ".jpg");
+	            if (match.Groups.Count > 1)
+	            {
+		            DownloadImage(match.Groups[1].ToString(), destination + "/" + wallbasePicture.Name + ".jpg");
+	            }
 
-                mw.Title = "WallbaseDM - Downloading: " + current + " from " + wallpaperList.Count;
+	            mw.Title = "WallbaseDM - Downloading: " + current + " from " + wallpaperList.Count;
             }
 
             mw.progressStop();
             return true;
         }
 
-        private async void DownloadImage(string url, string destination)
-        {
-            try
-            {
-                HttpWebRequest request = HttpWebRequest.CreateHttp(url);
-                request.UserAgent = USER_AGENT;
-                
-                HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
+	    private List<string> GetDownloadedWallpaperList(string destination)
+	    {
+		    IEnumerable<string> list = Directory.EnumerateFiles(destination, "*.jpg", SearchOption.TopDirectoryOnly);
+			List<string> result = new List<string>();
+		    foreach (string s in list)
+		    {
+				FileInfo fi = new FileInfo(s);
 
-                if (response != null && ((response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Redirect ||
-                                          response.StatusCode == HttpStatusCode.Moved) &&
-                                         response.ContentType.StartsWith("image", StringComparison.OrdinalIgnoreCase)))
+				result.Add(fi.Name.Substring(0, fi.Name.Length - 4));
+		    }
+
+		    return result;
+	    }
+
+	    private async void DownloadImage(string url, string destination)
+	    {
+			int retries = 3;
+            while (retries > 0)
+            {
+                try
                 {
-                    using (Stream stream = response.GetResponseStream())
+                    HttpWebRequest request = WebRequest.CreateHttp(url);
+                    request.UserAgent = USER_AGENT;
+
+                    HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
+
+                    if (response != null &&
+                        ((response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Redirect ||
+                          response.StatusCode == HttpStatusCode.Moved) &&
+                         response.ContentType.StartsWith("image", StringComparison.OrdinalIgnoreCase)))
                     {
-                        using (Stream file = File.OpenWrite(destination))
+                        using (Stream stream = response.GetResponseStream())
                         {
-                            byte[] buffer = new byte[4096];
-                            int bytesRead;
-                            do
+                            using (Stream file = File.OpenWrite(destination))
                             {
-                                bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                                await file.WriteAsync(buffer, 0, bytesRead);
-                            } while (bytesRead != 0);
+                                if (stream != null)
+                                {
+                                    byte[] buffer = new byte[4096];
+                                    int bytesRead;
+                                    do
+                                    {
+                                        bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+                                        await file.WriteAsync(buffer, 0, bytesRead);
+                                    } while (bytesRead != 0);
+	                                
+	                                return;
+                                }
+                            }
                         }
                     }
                 }
+                catch (Exception e)
+                {
+                    Log("Error: " + e.Message + "\n" + e.StackTrace);
+					Log("Download image: " + url);
+	                retries--;
+                }
             }
-            catch (Exception)
-            {
-            }
-        }
+			Log("Aborted!");
+	    }
 
         private async Task<List<WallbasePicture>> GetWallpaperList(string query, int limit)
         {
@@ -113,7 +153,7 @@ namespace WallbaseDM
                 List<WallbasePicture> result = new List<WallbasePicture>();
 
                 string response = await MakeRequest(WALLBASE_SEARCH_PAGE + query, WALLBASE_SEARCH_PAGE);
-
+                
                 Regex regexLast = new Regex("results_count: ([0-9]+),\n");
 
                 Match matchLast = regexLast.Match(response);
@@ -149,8 +189,11 @@ namespace WallbaseDM
                             int purity = Int32.Parse(match.Groups[2].ToString());
                             result.Add(new WallbasePicture(match.Groups[1].ToString(), url, (Purity) purity));
                             current++;
+                                
                         }
-                        mw.Title = "WallbaseDM - Parsing: " + current + " from " + until;
+						mw.Title = "WallbaseDM - Parsing: " + current + " from " + until;
+                        if(matches.Count == 0)
+                            break;
                     }
                 }
                 mw.progressStop();
@@ -158,56 +201,64 @@ namespace WallbaseDM
             }
             catch (Exception)
             {
-                return null;
+                return new List<WallbasePicture>();
             }
-        } 
+        }
 
         private async Task<string> MakeRequest(string url, string referer = null, byte[] postData = null)
         {
-            try
+            int retries = 3;
+            while (retries > 0)
             {
-                HttpWebRequest request = HttpWebRequest.CreateHttp(url);
-                request.UserAgent = USER_AGENT;
-                request.Referer = referer != null ? referer : WALLBASE_INDEX_URL;
-                request.CookieContainer = _cookies;
-
-                if (postData != null)
+                try
                 {
-                    request.Method = "POST";
-                    request.ContentLength = postData.Length;
-                    request.ContentType = "application/x-www-form-urlencoded";
+                    HttpWebRequest request = WebRequest.CreateHttp(url);
+                    request.UserAgent = USER_AGENT;
+                    request.Referer = referer ?? WALLBASE_INDEX_URL;
+                    request.CookieContainer = _cookies;
 
-                    using (Stream reqStream = request.GetRequestStream())
+                    if (postData != null)
                     {
-                        reqStream.Write(postData, 0, postData.Length);
+                        request.Method = "POST";
+                        request.ContentLength = postData.Length;
+                        request.ContentType = "application/x-www-form-urlencoded";
+
+                        using (Stream reqStream = request.GetRequestStream())
+                        {
+                            reqStream.Write(postData, 0, postData.Length);
+                        }
                     }
+
+                    string result;
+
+                    HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
+                    using (Stream stream = response.GetResponseStream())
+                    {
+                        StreamReader reader = new StreamReader(stream);
+                        result = reader.ReadToEnd();
+                        reader.Close();
+                    }
+
+                    _BugFix_CookieDomain(_cookies);
+
+                    return result;
                 }
-
-                string result;
-
-                HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
-                using (Stream stream = response.GetResponseStream())
+                catch (Exception e)
                 {
-                    StreamReader reader = new StreamReader(stream);
-                    result = reader.ReadToEnd();
-                    reader.Close();
+                    Log("Error: " + e.Message + "\n" + e.StackTrace);
+					Log("Request: " + url);
+					retries--;
                 }
-
-                _BugFix_CookieDomain(_cookies);
-
-                return result;
             }
-            catch (Exception)
-            {
-                return null;
-            }
+            Log("Request Aborted!");
+            return string.Empty;
         }
-        
+
         public async Task<bool> Authenticate(string login, string pass)
         {
             try
             {
-                ServicePointManager.Expect100Continue = false;
+ 
                 
                 string result = await MakeRequest(WALLBASE_LOGIN_URL);
                 
@@ -234,6 +285,7 @@ namespace WallbaseDM
             }
             catch (Exception)
             {
+	            MessageBox.Show("Invalid login/password or connection error.", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
         }
