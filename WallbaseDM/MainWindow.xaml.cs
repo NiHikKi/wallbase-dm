@@ -74,7 +74,9 @@ namespace WallbaseDM
 
             string queryString = Wallbase.Instance.BuildQuery(isSFW, isSKETCHY, isNSFW, isW, isWG, isHR, "", query, isDesc, order);
 
-            if (await Wallbase.Instance.DownloadWallpapers(queryString, txtDestination.Text, false,
+	        string destination = string.IsNullOrEmpty(txtDestination.Text) ? "./WDMDownloads/" : txtDestination.Text;
+
+            if (await Wallbase.Instance.DownloadWallpapers(queryString, destination, false,
                                                      limit > 0 ? limit : Int32.MaxValue))
             {
                 ButtonStart.IsEnabled = true;

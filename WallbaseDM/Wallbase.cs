@@ -131,6 +131,8 @@ namespace WallbaseDM
 
 	    private List<string> GetDownloadedWallpaperList(string destination)
 	    {
+		    if (!Directory.Exists(destination))
+			    Directory.CreateDirectory(destination);
 		    IEnumerable<string> list = Directory.EnumerateFiles(destination, "*.jpg", SearchOption.TopDirectoryOnly);
 			List<string> result = new List<string>();
 		    foreach (string s in list)
