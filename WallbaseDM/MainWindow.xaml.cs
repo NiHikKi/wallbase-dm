@@ -1,7 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Net;
-using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
@@ -29,7 +28,9 @@ namespace WallbaseDM
 	        txtPass.Password = user.Default.pass;
 
 			ServicePointManager.Expect100Continue = false;
-	        ServicePointManager.DefaultConnectionLimit = 30;
+	        ServicePointManager.DefaultConnectionLimit = 50;
+
+	        queue.ItemsSource = Wallbase.toDownload;
         }
 
         private async void ButtonStart_OnClick(object sender, RoutedEventArgs e)
@@ -118,15 +119,15 @@ namespace WallbaseDM
 
         private void btnChangeDestination_Click(object sender, RoutedEventArgs e)
         {
-            selectFolder();
+            SelectFolder();
         }
 
         private void TxtDestination_OnMouseDown(object sender, MouseButtonEventArgs e)
         {
-            selectFolder();
+            SelectFolder();
         }
 
-        private void selectFolder()
+        private void SelectFolder()
         {
             FolderBrowserDialog dialog = new FolderBrowserDialog();
             if (String.IsNullOrEmpty(user.Default.lastDestination))
@@ -140,14 +141,5 @@ namespace WallbaseDM
             user.Default.lastDestination = dialog.SelectedPath;
         }
 
-        public void progressStart()
-        {
-            progressBar.IsIndeterminate = true;
-        }
-
-        public void progressStop()
-        {
-            progressBar.IsIndeterminate = false;
-        }
     }
 }

@@ -6,16 +6,21 @@
         <TabControl Margin="200,0,5,24">
             <TabItem Header="Queue">
                 <Grid Background="#FFE5E5E5">
+                    <DataGrid Name="queue" AutoGenerateColumns="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="0.6*"/>
+                            <DataGridTextColumn Header="Purity" Binding="{Binding Purity}" Width="0.2*" />
+                            <DataGridTextColumn Header="Downloaded" Binding="{Binding Downloaded}" Width="0.2*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </Grid>
-            </TabItem>
-            <TabItem Header="Preview" Visibility="Hidden">
-                <Grid Background="#FFE5E5E5" HorizontalAlignment="Right" Width="486"/>
             </TabItem>
             <TabItem Header="Log" >
                 <Grid Background="#FFE5E5E5">
                     <TextBox Name="txtLog" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" IsReadOnly="False" VerticalScrollBarVisibility="Auto" />
                 </Grid>
             </TabItem>
+            
         </TabControl>
         <GroupBox Header="Purity" HorizontalAlignment="Left" Height="85" VerticalAlignment="Top" Width="95"/>
         <GroupBox Header="Category" HorizontalAlignment="Left" Height="85" Margin="100,0,0,0" VerticalAlignment="Top" Width="95" />

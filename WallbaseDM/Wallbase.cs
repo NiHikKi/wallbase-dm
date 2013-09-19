@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -19,6 +20,7 @@ namespace WallbaseDM
         private const string USER_AGENT = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.66 Safari/537.36";
 
         private static Wallbase _instance;
+	    public static ObservableCollection<WallbasePicture> toDownload = new ObservableCollection<WallbasePicture>();
 
         public static Wallbase Instance
         {
@@ -52,7 +54,7 @@ namespace WallbaseDM
 
 			List<string> alreadyDownloaded = GetDownloadedWallpaperList(destination);
 
-			List<WallbasePicture> toDownload = new List<WallbasePicture>();
+			toDownload = new ObservableCollection<WallbasePicture>();
 
 	        foreach (WallbasePicture picture in wallpaperList)
 	        {
@@ -62,26 +64,68 @@ namespace WallbaseDM
 			
 			Log("To download: " + toDownload.Count);
             MainWindow mw = Application.Current.MainWindow as MainWindow;
-            mw.progressStart();
-            Regex regex = new Regex("<img src=\\\"(http://wallpapers.wallbase.cc/(.*))\\\" class=\\\"wall");
+	        mw.queue.ItemsSource = toDownload;
+			mw.queue.Items.Refresh();
+	        
+            mw.Title = "WallbaseDM - Downloading";
+	        mw.progressBar.Value = 0;
+	        mw.progressBar.Maximum = toDownload.Count;
+			
 
-            int current = 0;
+			Regex regex = new Regex("<img src=\\\"(http://wallpapers.wallbase.cc/(.*))\\\" class=\\\"wall");
 
-			foreach (var wallbasePicture in toDownload)
-            {
-                string response = await MakeRequest(WALLBASE_WALLPAPER_URL + wallbasePicture.Name, wallbasePicture.Referer);
+			int concurrencyLevel = 25;
+			int current = 0;
+			
+			var downloadTasks = new List<Task<WallbasePicture>>();
+			while(current < concurrencyLevel && current < toDownload.Count)
+			{
+				string response = await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer);
 
-                Match match = regex.Match(response);
-                current++;
-	            if (match.Groups.Count > 1)
-	            {
-		            DownloadImage(match.Groups[1].ToString(), destination + "/" + wallbasePicture.Name + ".jpg");
-	            }
+				Match match = regex.Match(response);
 
-	            mw.Title = "WallbaseDM - Downloading: " + current + " from " + wallpaperList.Count;
-            }
+				toDownload[current].Url = match.Groups[1].ToString();
+				toDownload[current].LocalPath = destination + "/" + toDownload[current].Name + ".jpg";
 
-            mw.progressStop();
+				if (!string.IsNullOrEmpty(toDownload[current].Url))
+				{
+					downloadTasks.Add(DownloadImageAsync(toDownload[current]));
+				}    
+
+				current++;
+			}
+
+	        while (downloadTasks.Count > 0)
+	        {
+		        try
+		        {
+					Task<WallbasePicture> downloadTask = await Task.WhenAny(downloadTasks);
+					downloadTasks.Remove(downloadTask);
+
+					await downloadTask;
+
+					mw.queue.Items.Refresh();
+		        }
+		        catch (Exception e)
+		        {
+			        Log("Error: " + e.Message);
+		        }
+
+		        if (current < toDownload.Count)
+		        {
+					string response = await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer);
+					Match match = regex.Match(response);
+
+					toDownload[current].Url = match.Groups[1].ToString();
+					toDownload[current].LocalPath = destination + "/" + toDownload[current].Name + ".jpg";
+
+					downloadTasks.Add(DownloadImageAsync(toDownload[current]));
+			        mw.progressBar.Value = ++current;
+		        }
+	        }
+
+			mw.Title = "WallbaseDM";
+
             return true;
         }
 
@@ -99,14 +143,14 @@ namespace WallbaseDM
 		    return result;
 	    }
 
-	    private async void DownloadImage(string url, string destination)
+	    private async Task<WallbasePicture> DownloadImageAsync(WallbasePicture picture)
 	    {
 			int retries = 3;
             while (retries > 0)
             {
                 try
                 {
-                    HttpWebRequest request = WebRequest.CreateHttp(url);
+                    HttpWebRequest request = WebRequest.CreateHttp(picture.Url);
                     request.UserAgent = USER_AGENT;
 
                     HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
@@ -118,7 +162,7 @@ namespace WallbaseDM
                     {
                         using (Stream stream = response.GetResponseStream())
                         {
-                            using (Stream file = File.OpenWrite(destination))
+                            using (Stream file = File.OpenWrite(picture.LocalPath))
                             {
                                 if (stream != null)
                                 {
@@ -129,8 +173,8 @@ namespace WallbaseDM
                                         bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
                                         await file.WriteAsync(buffer, 0, bytesRead);
                                     } while (bytesRead != 0);
-	                                
-	                                return;
+	                                picture.Downloaded = true;
+	                                return picture;
                                 }
                             }
                         }
@@ -139,11 +183,12 @@ namespace WallbaseDM
                 catch (Exception e)
                 {
                     Log("Error: " + e.Message + "\n" + e.StackTrace);
-					Log("Download image: " + url);
+					Log("Image url: " + picture.Url);
 	                retries--;
                 }
             }
 			Log("Aborted!");
+		    return picture;
 	    }
 
         private async Task<List<WallbasePicture>> GetWallpaperList(string query, int limit)
@@ -166,9 +211,11 @@ namespace WallbaseDM
                 string url;
 
                 MainWindow mw = Application.Current.MainWindow as MainWindow;
-                mw.progressStart();
                 until = until > limit ? limit : until;
-
+	            
+				mw.progressBar.Maximum = until;
+	            mw.progressBar.Value = 0;
+				mw.Title = "WallbaseDM - Collecting";
                 while (current < until)
                 {
                     if(current >= limit)
@@ -191,12 +238,11 @@ namespace WallbaseDM
                             current++;
                                 
                         }
-						mw.Title = "WallbaseDM - Parsing: " + current + " from " + until;
+	                    mw.progressBar.Value = current;
                         if(matches.Count == 0)
                             break;
                     }
                 }
-                mw.progressStop();
                 return result;
             }
             catch (Exception)
