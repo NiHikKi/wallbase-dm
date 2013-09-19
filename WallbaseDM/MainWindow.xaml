@@ -6,7 +6,7 @@
         <TabControl Margin="200,0,5,24">
             <TabItem Header="Queue">
                 <Grid Background="#FFE5E5E5">
-                    <DataGrid Name="queue" AutoGenerateColumns="False">
+                    <DataGrid Name="queue" AutoGenerateColumns="False" IsReadOnly="True">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="0.6*"/>
                             <DataGridTextColumn Header="Purity" Binding="{Binding Purity}" Width="0.2*" />

@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -12,15 +13,21 @@ namespace WallbaseDM
 {
     class Wallbase
     {
+	    private const int DOWNLOAD_DELAY = 1000;
+
         private const string WALLBASE_LOGIN_URL = "http://wallbase.cc/user/login";
         private const string WALLBASE_AUTH_URL = "http://wallbase.cc/user/do_login";
         private const string WALLBASE_INDEX_URL = "http://wallbase.cc/";
         private const string WALLBASE_SEARCH_PAGE = "http://wallbase.cc/search";
         private const string WALLBASE_WALLPAPER_URL = "http://wallbase.cc/wallpaper/";
-        private const string USER_AGENT = "Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/29.0.1547.66 Safari/537.36";
+        private const string USER_AGENT = "WallbaseDM";
 
         private static Wallbase _instance;
 	    public static ObservableCollection<WallbasePicture> toDownload = new ObservableCollection<WallbasePicture>();
+
+	    private static long lastRequest = 0;
+	    private static long lastDownload = 0;
+	    private static int downloaded = 0;
 
         public static Wallbase Instance
         {
@@ -47,87 +54,107 @@ namespace WallbaseDM
 
             return queryString;
         }
-		
-        public async Task<bool> DownloadWallpapers(string queryString, string destination, bool byPurity = false, int limit = Int32.MaxValue)
-        {
-            List<WallbasePicture> wallpaperList = await GetWallpaperList(queryString, limit);
 
-			List<string> alreadyDownloaded = GetDownloadedWallpaperList(destination);
+	    public async Task<bool> DownloadWallpapers(string queryString, string destination, bool byPurity = false,
+	                                               int limit = Int32.MaxValue)
+	    {
+		    List<WallbasePicture> wallpaperList = await GetWallpaperList(queryString, limit);
 
-			toDownload = new ObservableCollection<WallbasePicture>();
+		    List<string> alreadyDownloaded = GetDownloadedWallpaperList(destination);
 
-	        foreach (WallbasePicture picture in wallpaperList)
-	        {
-		        if(!alreadyDownloaded.Contains(picture.Name))
-					toDownload.Add(picture);
-	        }
-			
-			Log("To download: " + toDownload.Count);
-            MainWindow mw = Application.Current.MainWindow as MainWindow;
-	        mw.queue.ItemsSource = toDownload;
-			mw.queue.Items.Refresh();
-	        
-            mw.Title = "WallbaseDM - Downloading";
-	        mw.progressBar.Value = 0;
-	        mw.progressBar.Maximum = toDownload.Count;
-			
+		    toDownload = new ObservableCollection<WallbasePicture>();
 
-			Regex regex = new Regex("<img src=\\\"(http://wallpapers.wallbase.cc/(.*))\\\" class=\\\"wall");
+		    foreach (WallbasePicture picture in wallpaperList)
+		    {
+			    if (!alreadyDownloaded.Contains(picture.Name))
+				    toDownload.Add(picture);
+		    }
 
-			int concurrencyLevel = 25;
-			int current = 0;
-			
-			var downloadTasks = new List<Task<WallbasePicture>>();
-			while(current < concurrencyLevel && current < toDownload.Count)
-			{
-				string response = await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer);
+		    Log("To download: " + toDownload.Count);
+		    downloaded = 0;
+		    MainWindow mw = null;
+		    Application.Current.Dispatcher.Invoke(delegate
+			    {
+				    mw = Application.Current.MainWindow as MainWindow;
+			    });
+		    if (mw != null)
+			    mw.Dispatcher.Invoke(delegate
+				    {
+					    mw.queue.ItemsSource = toDownload;
+					    mw.queue.Items.Refresh();
 
-				Match match = regex.Match(response);
+					    mw.Title = "WallbaseDM - Downloading";
+					    mw.progressBar.Value = 0;
+					    mw.progressBar.Maximum = toDownload.Count;
+				    });
 
-				toDownload[current].Url = match.Groups[1].ToString();
-				toDownload[current].LocalPath = destination + "/" + toDownload[current].Name + ".jpg";
 
-				if (!string.IsNullOrEmpty(toDownload[current].Url))
-				{
-					downloadTasks.Add(DownloadImageAsync(toDownload[current]));
-				}    
+		    Regex regex = new Regex("<img src=\\\"(http://wallpapers.wallbase.cc/(.*))\\\" class=\\\"wall");
 
-				current++;
-			}
+		    int concurrencyLevel = 2;
+		    int current = 0;
 
-	        while (downloadTasks.Count > 0)
-	        {
-		        try
-		        {
-					Task<WallbasePicture> downloadTask = await Task.WhenAny(downloadTasks);
-					downloadTasks.Remove(downloadTask);
+		    var downloadTasks = new List<Task<WallbasePicture>>();
+		    while (current < concurrencyLevel && current < toDownload.Count)
+		    {
+			    string response =
+				    await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer, null, 250);
 
-					await downloadTask;
+			    Match match = regex.Match(response);
 
-					mw.queue.Items.Refresh();
-		        }
-		        catch (Exception e)
-		        {
-			        Log("Error: " + e.Message);
-		        }
+			    toDownload[current].Url = match.Groups[1].ToString();
+			    toDownload[current].LocalPath = destination + "/" + toDownload[current].Name + ".jpg";
 
-		        if (current < toDownload.Count)
-		        {
-					string response = await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer);
-					Match match = regex.Match(response);
+			    if (!string.IsNullOrEmpty(toDownload[current].Url))
+			    {
+				    downloadTasks.Add(DownloadImageAsync(toDownload[current]));
+			    }
 
-					toDownload[current].Url = match.Groups[1].ToString();
-					toDownload[current].LocalPath = destination + "/" + toDownload[current].Name + ".jpg";
+			    current++;
+		    }
 
-					downloadTasks.Add(DownloadImageAsync(toDownload[current]));
-			        mw.progressBar.Value = ++current;
-		        }
-	        }
+		    while (downloadTasks.Count > 0)
+		    {
+			    try
+			    {
+				    Task<WallbasePicture> downloadTask = await Task.WhenAny(downloadTasks);
+				    downloadTasks.Remove(downloadTask);
 
-			mw.Title = "WallbaseDM";
+				    await downloadTask;
 
-            return true;
-        }
+				    mw.Dispatcher.Invoke(delegate
+					    {
+						    mw.queue.Items.Refresh();
+						    mw.progressBar.Value = downloaded;
+					    });
+
+			    }
+			    catch (Exception e)
+			    {
+				    Log("Error: " + e.Message);
+			    }
+
+			    if (current < toDownload.Count)
+			    {
+				    string response =
+					    await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer, null, 250);
+				    Match match = regex.Match(response);
+
+				    toDownload[current].Url = match.Groups[1].ToString();
+				    toDownload[current].LocalPath = destination + "/" + toDownload[current].Name + ".jpg";
+
+				    downloadTasks.Add(DownloadImageAsync(toDownload[current]));
+				    current++;
+			    }
+		    }
+
+		    mw.Dispatcher.Invoke(delegate
+			    {
+				    mw.Title = "WallbaseDM";
+			    });
+
+		    return true;
+	    }
 
 	    private List<string> GetDownloadedWallpaperList(string destination)
 	    {
@@ -155,41 +182,57 @@ namespace WallbaseDM
                     HttpWebRequest request = WebRequest.CreateHttp(picture.Url);
                     request.UserAgent = USER_AGENT;
 
-                    HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
+	                long current = DateTime.Now.Ticks - lastDownload;
+	                if (current < DOWNLOAD_DELAY*1000)
+	                {
+		                Thread.Sleep((int) Math.Abs(DOWNLOAD_DELAY - current/1000));
+	                }
 
-                    if (response != null &&
-                        ((response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Redirect ||
-                          response.StatusCode == HttpStatusCode.Moved) &&
-                         response.ContentType.StartsWith("image", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        using (Stream stream = response.GetResponseStream())
-                        {
-                            using (Stream file = File.OpenWrite(picture.LocalPath))
-                            {
-                                if (stream != null)
-                                {
-                                    byte[] buffer = new byte[4096];
-                                    int bytesRead;
-                                    do
-                                    {
-                                        bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-                                        await file.WriteAsync(buffer, 0, bytesRead);
-                                    } while (bytesRead != 0);
-	                                picture.Downloaded = true;
-	                                return picture;
-                                }
-                            }
-                        }
-                    }
+	                HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
+
+					if (response != null &&
+						((response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Redirect ||
+						  response.StatusCode == HttpStatusCode.Moved) &&
+						 response.ContentType.StartsWith("image", StringComparison.OrdinalIgnoreCase)))
+					{
+						using (Stream stream = response.GetResponseStream())
+						{
+							using (Stream file = File.OpenWrite(picture.LocalPath))
+							{
+								if (stream != null)
+								{
+									byte[] buffer = new byte[4096];
+									int bytesRead;
+									do
+									{
+										bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
+										await file.WriteAsync(buffer, 0, bytesRead);
+									} while (bytesRead != 0);
+									picture.Downloaded = true;
+									downloaded++;
+									lastDownload = DateTime.Now.Ticks;
+
+									return picture;
+								}
+							}
+						}
+					}
+					else if (response != null && response.StatusCode == HttpStatusCode.NotFound)
+					{
+						downloaded++;
+						return picture;
+					}
                 }
                 catch (Exception e)
                 {
                     Log("Error: " + e.Message + "\n" + e.StackTrace);
 					Log("Image url: " + picture.Url);
+					Thread.Sleep(2000);
 	                retries--;
                 }
             }
 			Log("Aborted!");
+		    downloaded++;
 		    return picture;
 	    }
 
@@ -212,13 +255,23 @@ namespace WallbaseDM
                 Regex regex = new Regex("<div id=\\\"thumb([0-9]+)\\\" class=\\\"thumbnail purity-([0-9]+)\\\"");
                 string url;
 
-                MainWindow mw = Application.Current.MainWindow as MainWindow;
+	            MainWindow mw = null;
+				Application.Current.Dispatcher.Invoke(delegate
+					{
+						mw = Application.Current.MainWindow as MainWindow;
+					});
                 until = until > limit ? limit : until;
-	            
-				mw.progressBar.Maximum = until;
-	            mw.progressBar.Value = 0;
-				mw.Title = "WallbaseDM - Collecting";
-                while (current < until)
+
+	            if (mw != null)
+	            {
+					mw.Dispatcher.Invoke(delegate
+						{
+							mw.progressBar.Maximum = until;
+							mw.progressBar.Value = 0;
+							mw.Title = "WallbaseDM - Collecting";		
+						});
+	            }
+	            while (current < until)
                 {
                     if(current >= limit)
                         break;
@@ -238,9 +291,11 @@ namespace WallbaseDM
                             int purity = Int32.Parse(match.Groups[2].ToString());
                             result.Add(new WallbasePicture(match.Groups[1].ToString(), url, (Purity) purity));
                             current++;
-                                
                         }
-	                    mw.progressBar.Value = current;
+						mw.Dispatcher.Invoke(delegate
+							{
+								mw.progressBar.Value = current;		
+							});
                         if(matches.Count == 0)
                             break;
                     }
@@ -253,7 +308,7 @@ namespace WallbaseDM
             }
         }
 
-        private async Task<string> MakeRequest(string url, string referer = null, byte[] postData = null)
+        private async Task<string> MakeRequest(string url, string referer = null, byte[] postData = null, int delay = 1000)
         {
             int retries = 3;
             while (retries > 0)
@@ -279,7 +334,15 @@ namespace WallbaseDM
 
                     string result;
 
+	                long current = DateTime.Now.Ticks - lastRequest;
+
+					if (current < delay*1000)
+					{
+						Thread.Sleep(delay);
+					}
+
                     HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse;
+	                
                     using (Stream stream = response.GetResponseStream())
                     {
                         StreamReader reader = new StreamReader(stream);
@@ -287,14 +350,15 @@ namespace WallbaseDM
                         reader.Close();
                     }
 
+					lastRequest = DateTime.Now.Ticks;
+
                     _BugFix_CookieDomain(_cookies);
 
                     return result;
                 }
                 catch (Exception e)
                 {
-                    Log("Error: " + e.Message + "\n" + e.StackTrace);
-					Log("Request: " + url);
+					Thread.Sleep(2000);
 					retries--;
                 }
             }
@@ -306,9 +370,7 @@ namespace WallbaseDM
         {
             try
             {
- 
-                
-                string result = await MakeRequest(WALLBASE_LOGIN_URL);
+				string result = await MakeRequest(WALLBASE_LOGIN_URL);
                 
                 Regex regex = new Regex("<input type=\"hidden\" name=\"csrf\" value=\"(.+)\"");
                 Regex regex2 = new Regex("<input type=\"hidden\" name=\"ref\" value=\"(.+)\"");
@@ -360,9 +422,18 @@ namespace WallbaseDM
             }
         }
 
-        private void Log(string msg)
-        {
-            ((MainWindow) Application.Current.MainWindow).Log(msg);
-        }
+	    private void Log(string msg)
+	    {
+		    MainWindow mw = null;
+		    Application.Current.Dispatcher.Invoke(delegate
+			    {
+				    mw = Application.Current.MainWindow as MainWindow;
+			    });
+		    if (mw != null)
+			    mw.Dispatcher.Invoke(delegate
+				    {
+					    mw.Log(msg);
+				    });
+	    }
     }
 }

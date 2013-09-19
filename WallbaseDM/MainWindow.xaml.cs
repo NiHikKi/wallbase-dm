@@ -1,6 +1,8 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
@@ -33,7 +35,7 @@ namespace WallbaseDM
 	        queue.ItemsSource = Wallbase.toDownload;
         }
 
-        private async void ButtonStart_OnClick(object sender, RoutedEventArgs e)
+        private void ButtonStart_OnClick(object sender, RoutedEventArgs e)
         {
             ButtonStart.IsEnabled = false;
             bool isNSFW = PurityNSFW.IsEnabled && (bool)PurityNSFW.IsChecked;
@@ -76,13 +78,18 @@ namespace WallbaseDM
 
 	        string destination = string.IsNullOrEmpty(txtDestination.Text) ? "./WDMDownloads/" : txtDestination.Text;
 
-            if (await Wallbase.Instance.DownloadWallpapers(queryString, destination, false,
-                                                     limit > 0 ? limit : Int32.MaxValue))
-            {
-                ButtonStart.IsEnabled = true;
-	            Title = "WallbaseDM";
-				Log("Completed!");
-            }
+	        new Thread(() =>
+		        {
+			        Task<bool> task = Wallbase.Instance.DownloadWallpapers(queryString, destination, false,
+			                                             limit > 0 ? limit : Int32.MaxValue);
+					task.Wait();
+					Dispatcher.Invoke(delegate
+						{
+							ButtonStart.IsEnabled = true;
+							Log("Completed!");		
+						});
+					
+		        }).Start();
         }
 
         private void MainWindow_OnClosing(object sender, CancelEventArgs e)
