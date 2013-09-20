@@ -160,6 +160,10 @@ namespace WallbaseDM
 		        {
 			        new Thread(() =>
 				        {
+							if (url.EndsWith("favorites"))
+								url += "/0/";
+							else if (url.EndsWith("favorites/"))
+								url += "0/";
 					        Task<bool> task = Wallbase.Instance.DownloadCollection(url, destination, limit > 0 ? limit : Int32.MaxValue);
 					        task.Wait();
 					        Dispatcher.Invoke(delegate
