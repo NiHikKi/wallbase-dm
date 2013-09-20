@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -13,14 +15,15 @@ namespace WallbaseDM
 {
     class Wallbase
     {
-	    private const int DOWNLOAD_DELAY = 1000;
+	    private const int DOWNLOAD_DELAY = 1500;
+	    private const int CONCURRENCY_LEVEL = 1;
 
         private const string WALLBASE_LOGIN_URL = "http://wallbase.cc/user/login";
         private const string WALLBASE_AUTH_URL = "http://wallbase.cc/user/do_login";
         private const string WALLBASE_INDEX_URL = "http://wallbase.cc/";
         private const string WALLBASE_SEARCH_PAGE = "http://wallbase.cc/search";
         private const string WALLBASE_WALLPAPER_URL = "http://wallbase.cc/wallpaper/";
-        private const string USER_AGENT = "WallbaseDM";
+        private string USER_AGENT = "WallbaseDM v." + Assembly.GetExecutingAssembly().GetName().Version;
 
         private static Wallbase _instance;
 	    public static ObservableCollection<WallbasePicture> toDownload = new ObservableCollection<WallbasePicture>();
@@ -55,11 +58,125 @@ namespace WallbaseDM
             return queryString;
         }
 
+		public async Task<bool> DownloadCollection(string url, string destination, int limit = Int32.MaxValue)
+		{
+			Stopwatch stopwatch = new Stopwatch();
+			stopwatch.Start();
+			List<WallbasePicture> wallpaperList = await GetCollectionWallpaperList(url, limit);
+			Log("Get in " + stopwatch.ElapsedMilliseconds + "ms");
+			
+			List<string> alreadyDownloaded = GetDownloadedWallpaperList(destination);
+			
+			toDownload = new ObservableCollection<WallbasePicture>();
+
+			foreach (WallbasePicture picture in wallpaperList)
+			{
+				if (!alreadyDownloaded.Contains(picture.Name))
+					toDownload.Add(picture);
+			}
+
+			Log("To download: " + toDownload.Count);
+			downloaded = 0;
+			MainWindow mw = null;
+			Application.Current.Dispatcher.Invoke(delegate
+			{
+				mw = Application.Current.MainWindow as MainWindow;
+			});
+			if (mw != null)
+				mw.Dispatcher.Invoke(delegate
+				{
+					mw.queue.ItemsSource = toDownload;
+					mw.queue.Items.Refresh();
+					mw.txtCount.Content = "Count: " + toDownload.Count;
+
+					mw.Title = "WallbaseDM - Downloading";
+					mw.progressBar.Value = 0;
+					mw.progressBar.Maximum = toDownload.Count;
+				});
+
+			stopwatch.Restart();
+
+			Regex regex = new Regex("<img src=\\\"(http://wallpapers.wallbase.cc/(.*))\\\" class=\\\"wall");
+
+			int concurrencyLevel = CONCURRENCY_LEVEL;
+			int current = 0;
+			Stopwatch stopwatchDownload = new Stopwatch();
+			var downloadTasks = new List<Task<WallbasePicture>>();
+			while (current < concurrencyLevel && current < toDownload.Count)
+			{
+				string response =
+					await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer, null, 250);
+
+				Match match = regex.Match(response);
+
+				toDownload[current].Url = match.Groups[1].ToString();
+				toDownload[current].LocalPath = destination + "/" + toDownload[current].Name + ".jpg";
+
+				if (!string.IsNullOrEmpty(toDownload[current].Url))
+				{
+					downloadTasks.Add(DownloadImageAsync(toDownload[current]));
+				}
+
+				current++;
+			}
+
+			while (downloadTasks.Count > 0)
+			{
+				try
+				{
+					stopwatchDownload.Start();
+					Task<WallbasePicture> downloadTask = await Task.WhenAny(downloadTasks);
+					downloadTasks.Remove(downloadTask);
+
+					await downloadTask;
+					Log("From last download elapsed " + stopwatchDownload.ElapsedMilliseconds + "ms"); 
+					if (stopwatchDownload.ElapsedMilliseconds < DOWNLOAD_DELAY)
+						Thread.Sleep(DOWNLOAD_DELAY);
+					stopwatchDownload.Restart();
+					mw.Dispatcher.Invoke(delegate
+					{
+						mw.queue.Items.Refresh();
+						mw.progressBar.Value = downloaded;
+						mw.Title = Math.Round(((double)downloaded / toDownload.Count) * 100, 2) + "% - WallbaseDM";
+					});
+
+				}
+				catch (Exception e)
+				{
+					Log("Error: " + e.Message);
+				}
+
+				if (current < toDownload.Count)
+				{
+					string response =
+						await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer, null, 250);
+					Match match = regex.Match(response);
+
+					toDownload[current].Url = match.Groups[1].ToString();
+					toDownload[current].LocalPath = destination + "/" + toDownload[current].Name + ".jpg";
+
+					downloadTasks.Add(DownloadImageAsync(toDownload[current]));
+					current++;
+				}
+			}
+
+			Log("Download of " + downloaded + " completed in " + stopwatch.ElapsedMilliseconds + "ms");
+			stopwatch.Stop();
+			mw.Dispatcher.Invoke(delegate
+			{
+				mw.Title = "WallbaseDM";
+			});
+
+			return true;
+		}
+
 	    public async Task<bool> DownloadWallpapers(string queryString, string destination, bool byPurity = false,
 	                                               int limit = Int32.MaxValue)
 	    {
+			Stopwatch stopwatch = new Stopwatch();
+			stopwatch.Start();
 		    List<WallbasePicture> wallpaperList = await GetWallpaperList(queryString, limit);
-
+			Log("Get in " + stopwatch.ElapsedMilliseconds + "ms");
 		    List<string> alreadyDownloaded = GetDownloadedWallpaperList(destination);
 
 		    toDownload = new ObservableCollection<WallbasePicture>();
@@ -82,17 +199,21 @@ namespace WallbaseDM
 				    {
 					    mw.queue.ItemsSource = toDownload;
 					    mw.queue.Items.Refresh();
+						mw.txtCount.Content = "Count: " + toDownload.Count;
 
 					    mw.Title = "WallbaseDM - Downloading";
 					    mw.progressBar.Value = 0;
 					    mw.progressBar.Maximum = toDownload.Count;
 				    });
 
+			stopwatch.Restart();
 
 		    Regex regex = new Regex("<img src=\\\"(http://wallpapers.wallbase.cc/(.*))\\\" class=\\\"wall");
 
-		    int concurrencyLevel = 2;
+			int concurrencyLevel = CONCURRENCY_LEVEL;
 		    int current = 0;
+
+			Stopwatch stopwatchDownload = new Stopwatch();
 
 		    var downloadTasks = new List<Task<WallbasePicture>>();
 		    while (current < concurrencyLevel && current < toDownload.Count)
@@ -121,10 +242,15 @@ namespace WallbaseDM
 				    downloadTasks.Remove(downloadTask);
 
 				    await downloadTask;
-
+					Log("From last download elapsed " + stopwatchDownload.ElapsedMilliseconds + "ms");
+					if(stopwatchDownload.ElapsedMilliseconds < DOWNLOAD_DELAY)
+						Thread.Sleep(DOWNLOAD_DELAY);
+					stopwatchDownload.Restart();
+					
 				    mw.Dispatcher.Invoke(delegate
 					    {
 						    mw.queue.Items.Refresh();
+							mw.Title = Math.Round(((double)downloaded / toDownload.Count) * 100, 2) + "% - WallbaseDM";
 						    mw.progressBar.Value = downloaded;
 					    });
 
@@ -137,7 +263,7 @@ namespace WallbaseDM
 			    if (current < toDownload.Count)
 			    {
 				    string response =
-					    await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer, null, 250);
+					    await MakeRequest(WALLBASE_WALLPAPER_URL + toDownload[current].Name, toDownload[current].Referer, null, 500);
 				    Match match = regex.Match(response);
 
 				    toDownload[current].Url = match.Groups[1].ToString();
@@ -147,7 +273,8 @@ namespace WallbaseDM
 				    current++;
 			    }
 		    }
-
+			Log("Download of " + downloaded + " completed in " + stopwatch.ElapsedMilliseconds + "ms");
+			stopwatch.Stop();
 		    mw.Dispatcher.Invoke(delegate
 			    {
 				    mw.Title = "WallbaseDM";
@@ -235,6 +362,79 @@ namespace WallbaseDM
 		    downloaded++;
 		    return picture;
 	    }
+
+
+		private async Task<List<WallbasePicture>> GetCollectionWallpaperList(string url, int limit)
+		{
+			try
+			{
+				List<WallbasePicture> result = new List<WallbasePicture>();
+
+				string response = await MakeRequest(url, WALLBASE_SEARCH_PAGE);
+
+				Regex regexLast = new Regex("results_count: ([0-9]+),\n");
+
+				Match matchLast = regexLast.Match(response);
+
+				int until = Int32.Parse(matchLast.Groups[1].ToString());
+				Log("Found: " + until);
+
+				int current = 0;
+				Regex regex = new Regex("<div id=\\\"thumb([0-9]+)\\\" class=\\\"thumbnail purity-([0-9]+)\\\"");
+				string currentUrl;
+
+				MainWindow mw = null;
+				Application.Current.Dispatcher.Invoke(delegate
+				{
+					mw = Application.Current.MainWindow as MainWindow;
+				});
+				until = until > limit ? limit : until;
+
+				if (mw != null)
+				{
+					mw.Dispatcher.Invoke(delegate
+					{
+						mw.progressBar.Maximum = until;
+						mw.progressBar.Value = 0;
+						mw.Title = "WallbaseDM - Collecting";
+					});
+				}
+				while (current < until)
+				{
+					if (current >= limit)
+						break;
+
+					currentUrl = url + "/" + current;
+					response = await MakeRequest(currentUrl);
+
+					if (response != null)
+					{
+						MatchCollection matches = regex.Matches(response);
+
+						foreach (Match match in matches)
+						{
+							if (current >= limit)
+								break;
+
+							int purity = Int32.Parse(match.Groups[2].ToString());
+							result.Add(new WallbasePicture(match.Groups[1].ToString(), currentUrl, (Purity)purity));
+							current++;
+						}
+						mw.Dispatcher.Invoke(delegate
+						{
+							mw.progressBar.Value = current;
+						});
+						if (matches.Count == 0)
+							break;
+					}
+				}
+				return result;
+			}
+			catch (Exception)
+			{
+				return new List<WallbasePicture>();
+			}
+		}
 
         private async Task<List<WallbasePicture>> GetWallpaperList(string query, int limit)
         {

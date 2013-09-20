@@ -1,7 +1,7 @@
 ﻿<Window x:Class="WallbaseDM.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="WallbaseDM" MinHeight="350" MinWidth="500" Closing="MainWindow_OnClosing">
+        Title="WallbaseDM" MinHeight="650" Height="650" MinWidth="500" Closing="MainWindow_OnClosing">
     <Grid>
         <TabControl Margin="200,0,5,24">
             <TabItem Header="Queue">
@@ -15,12 +15,12 @@
                     </DataGrid>
                 </Grid>
             </TabItem>
-            <TabItem Header="Log" >
+            <TabItem Header="Log" Visibility="Hidden">
                 <Grid Background="#FFE5E5E5">
                     <TextBox Name="txtLog" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True" IsReadOnly="False" VerticalScrollBarVisibility="Auto" />
                 </Grid>
             </TabItem>
-            
+
         </TabControl>
         <GroupBox Header="Purity" HorizontalAlignment="Left" Height="85" VerticalAlignment="Top" Width="95"/>
         <GroupBox Header="Category" HorizontalAlignment="Left" Height="85" Margin="100,0,0,0" VerticalAlignment="Top" Width="95" />
@@ -28,39 +28,42 @@
         <!-- Purity filters -->
         <CheckBox Content="SFW" Name="PuritySFW" ToolTip="Safe" HorizontalAlignment="Left" Height="15" Margin="10,25,0,0" VerticalAlignment="Top" Width="105" />
         <CheckBox Content="Sketchy" Name="PuritySKETCHY" HorizontalAlignment="Left" Height="15" Margin="10,45,0,0" VerticalAlignment="Top" Width="95"/>
-        <CheckBox Content="NSFW" Name="PurityNSFW" IsEnabled="False" ToolTip="Login to enable" HorizontalAlignment="Left" Height="15" Margin="10,65,0,0" VerticalAlignment="Top" Width="95"/>
+        <CheckBox Content="NSFW" Name="PurityNSFW" IsEnabled="False" ToolTip="Login to enable" HorizontalAlignment="Left" Height="15" Margin="10,65,0,0" VerticalAlignment="Top" Width="95" />
         <!-- Category filters -->
         <CheckBox Content="WG" Name="CategoryWG" ToolTip="Wallpaper / General" HorizontalAlignment="Left" Height="15" Margin="115,25,0,0" VerticalAlignment="Top" Width="70"/>
         <CheckBox Content="W" Name="CategoryW" ToolTip="Manga / Anime" HorizontalAlignment="Left" Height="15" Margin="115,45,0,0" VerticalAlignment="Top" Width="70"/>
         <CheckBox Content="HR" Name="CategoryHR" ToolTip="High Resolution" HorizontalAlignment="Left" Height="15" Margin="115,65,0,0" VerticalAlignment="Top" Width="70"/>
 
-        <TextBox HorizontalAlignment="Left" Height="25" Margin="5,105,0,0" TextWrapping="Wrap" Text="" Name="SearchQuery" VerticalAlignment="Top" Width="190" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
-        <Label Content="Search:" HorizontalAlignment="Left" Height="30" Margin="5,80,0,0" VerticalAlignment="Top" Width="125"/>
+        <TextBox HorizontalAlignment="Left" Height="25" Margin="5,219,0,0" TextWrapping="Wrap" Text="" Name="SearchQuery" VerticalAlignment="Top" Width="190" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
 
-        <Button Content="Start" Name="ButtonStart" HorizontalAlignment="Left" Height="25" Margin="110,305,0,0" VerticalAlignment="Top" Width="85" Click="ButtonStart_OnClick"/>
-        <TextBox Name="txtLogin" HorizontalAlignment="Left" Height="25" Margin="20,378,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="165" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
-        <Button Content="Login" HorizontalAlignment="Left" Height="25" Margin="115,465,0,0" VerticalAlignment="Top" Width="70" Click="BtnLogin_Click" Name="BtnLogin"/>
-        <Label Content="Password:" HorizontalAlignment="Left" Height="40" Margin="10,403,0,0" VerticalAlignment="Top" Width="165"/>
-        <Label Content="Login:" HorizontalAlignment="Left" Height="30" Margin="10,353,0,0" VerticalAlignment="Top" Width="170"/>
-        <TextBox HorizontalAlignment="Left" Height="20" Margin="10,265,0,0" TextWrapping="NoWrap" IsReadOnly="True" Text="" VerticalAlignment="Top" Width="160" Name="txtDestination" MouseLeftButtonUp="TxtDestination_OnMouseDown"/>
-        <Label Content="Destination:" HorizontalAlignment="Left" Height="30" Margin="0,240,0,0" VerticalAlignment="Top" Width="105"/>
-        <Button Content="..." Name="btnChangeDestination" HorizontalAlignment="Left" Height="20" Margin="170,265,0,0" VerticalAlignment="Top" Width="25" Click="btnChangeDestination_Click"/>
-        <PasswordBox Name="txtPass" HorizontalAlignment="Left" Margin="20,428,0,0" VerticalAlignment="Top" Width="166" Height="25" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
-        <Label Content="Order by:" HorizontalAlignment="Left" Height="25" Margin="5,130,0,0" VerticalAlignment="Top" Width="80"/>
-        <ComboBox Name="Order" HorizontalAlignment="Left" Height="25" Margin="5,155,0,0" VerticalAlignment="Top" Width="90" VerticalContentAlignment="Center">
+        <Button Content="Start" Name="ButtonStart" HorizontalAlignment="Left" Height="25" Margin="100,397,0,0" VerticalAlignment="Top" Width="95" Click="ButtonStart_OnClick"/>
+        <TextBox Name="txtLogin" HorizontalAlignment="Left" Height="25" Margin="5,485,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="190" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+        <Button Content="Login" HorizontalAlignment="Left" Height="25" Margin="115,560,0,0" VerticalAlignment="Top" Width="70" Click="BtnLogin_Click" Name="BtnLogin"/>
+        <Label Content="Password:" HorizontalAlignment="Left" Height="40" Margin="5,507,0,0" VerticalAlignment="Top" Width="165"/>
+        <Label Content="Login:" HorizontalAlignment="Left" Height="30" Margin="5,461,0,0" VerticalAlignment="Top" Width="170"/>
+        <TextBox HorizontalAlignment="Left" Height="20" Margin="5,364,0,0" TextWrapping="NoWrap" IsReadOnly="True" Text="" VerticalAlignment="Top" Width="165" Name="txtDestination" MouseLeftButtonUp="TxtDestination_OnMouseDown"/>
+        <Label Content="Destination:" HorizontalAlignment="Left" Height="30" Margin="5,343,0,0" VerticalAlignment="Top" Width="105"/>
+        <Button Content="..." Name="btnChangeDestination" HorizontalAlignment="Left" Height="20" Margin="170,364,0,0" VerticalAlignment="Top" Width="25" Click="btnChangeDestination_Click"/>
+        <PasswordBox Name="txtPass" HorizontalAlignment="Left" Margin="5,530,0,0" VerticalAlignment="Top" Width="190" Height="25" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+        <Label Content="Order by:" HorizontalAlignment="Left" Height="25" Margin="5,241,0,0" VerticalAlignment="Top" Width="80"/>
+        <ComboBox Name="Order" HorizontalAlignment="Left" Height="25" Margin="5,265,0,0" VerticalAlignment="Top" Width="90" VerticalContentAlignment="Center">
             <ComboBoxItem Content="Relevance" IsSelected="True"/>
             <ComboBoxItem Content="Date added"/>
             <ComboBoxItem Content="Views"/>
             <ComboBoxItem Content="Favorites"/>
             <ComboBoxItem Content="Random"/>
         </ComboBox>
-        <ComboBox Name="OrderMode" HorizontalAlignment="Left" Height="25" Margin="100,155,0,0" VerticalAlignment="Top" Width="95" VerticalContentAlignment="Center">
+        <ComboBox Name="OrderMode" HorizontalAlignment="Left" Height="25" Margin="100,265,0,0" VerticalAlignment="Top" Width="95" VerticalContentAlignment="Center">
             <ComboBoxItem Content="Descending" IsSelected="True"/>
             <ComboBoxItem Content="Ascending"/>
         </ComboBox>
-        <Label Content="Limit: (0 - unlimited)" HorizontalAlignment="Left" Height="25" Margin="5,185,0,0" VerticalAlignment="Top" Width="190"/>
-        <TextBox Name="txtLimit" HorizontalAlignment="Left" Height="20" Margin="5,210,0,0" TextWrapping="Wrap" Text="0" VerticalAlignment="Top" Width="190" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+        <Label Content="Limit: (0 - unlimited)" HorizontalAlignment="Left" Height="25" Margin="5,295,0,0" VerticalAlignment="Top" Width="190"/>
+        <TextBox Name="txtLimit" HorizontalAlignment="Left" Height="20" Margin="5,318,0,0" TextWrapping="Wrap" Text="0" VerticalAlignment="Top" Width="190" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
         <ProgressBar Name="progressBar" Margin="200,0,5,2" Height="19" VerticalAlignment="Bottom"/>
-        <CheckBox Content="Save" Name="chkSave" HorizontalAlignment="Left" Height="15" Margin="20,465,0,0" VerticalAlignment="Top" Width="85"/>
+        <CheckBox Content="Save" Name="chkSave" HorizontalAlignment="Left" Height="15" Margin="20,565,0,0" VerticalAlignment="Top" Width="85"/>
+        <TextBox Name="txtFavUrl" HorizontalAlignment="Left" Height="28" Margin="5,169,0,0" TextWrapping="Wrap" Text="" VerticalAlignment="Top" Width="190" VerticalContentAlignment="Center"/>
+        <RadioButton Content="Search" IsChecked="True" GroupName="searchType" Name="radioSearch" HorizontalAlignment="Left" Margin="5,200,0,0" VerticalAlignment="Top" Checked="RadioSearch_OnChecked" Width="190"/>
+        <RadioButton Content="Favorites / Collection URL:" GroupName="searchType" Name="radioFavs" HorizontalAlignment="Left" Margin="5,149,0,0" VerticalAlignment="Top" Checked="RadioFavs_OnChecked" Width="190"/>
+        <Label Content="Count: 0" Name="txtCount" Margin="0,-2,10,0" VerticalAlignment="Top" ScrollViewer.CanContentScroll="True" HorizontalContentAlignment="Right" HorizontalAlignment="Right" Width="145"/>
     </Grid>
 </Window>
